@@ -65,8 +65,8 @@ fn remote_updated() -> Result<bool> {
 fn pull_changes() -> Result<()> {
     Command::new("git")
         .args(["pull"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        // .stdout(Stdio::null())
+        // .stderr(Stdio::null())
         .spawn()?
         .wait()?;
     Ok(())
