@@ -1,22 +1,23 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::process::{Command, Stdio};
 
 #[derive(Debug, Parser)]
-struct MetaArgs {
+struct CargoArgs {
     #[clap(subcommand)]
-    gitwatch: Args,
+    gitwatch: GitWatchArgs,
 }
 #[derive(Debug, Subcommand)]
-enum Args {
+enum GitWatchArgs {
     Gitwatch {
         #[clap(long, short, multiple_values = true, allow_hyphen_values = true)]
         command: Option<Vec<String>>,
     },
 }
 
-fn main() {
-    let args = MetaArgs::parse();
-    let Args::Gitwatch {
+fn main() -> Result<()> {
+    let args = CargoArgs::parse();
+    let GitWatchArgs::Gitwatch {
         command: command_arg,
     } = args.gitwatch;
     let mut command = match command_arg {
@@ -31,46 +32,42 @@ fn main() {
             command
         }
     };
-    let mut proc = command.spawn().unwrap();
-    loop {
-        if proc.try_wait().unwrap().is_some() {
-            break;
-        }
-        if remote_updated() {
-            pull_changes();
-            proc.kill().unwrap();
-            proc = command.spawn().unwrap();
+    let mut proc = command.spawn()?;
+    while let None = proc.try_wait()? {
+        if remote_updated()? {
+            pull_changes()?;
+            proc.kill()?;
+            proc = command.spawn()?;
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
+    Ok(())
 }
 
-fn remote_updated() -> bool {
+fn remote_updated() -> Result<bool> {
     Command::new("git")
         .args(["remote", "update"])
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?
+        .wait()?;
     let stdout = Command::new("git")
         .args(["status"])
         .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
-        .wait_with_output()
-        .unwrap()
+        .stderr(Stdio::null())
+        .spawn()?
+        .wait_with_output()?
         .stdout;
-    let output = std::str::from_utf8(stdout.as_slice()).unwrap();
-    output.contains("Your branch is behind")
+    let output = std::str::from_utf8(stdout.as_slice())?;
+    Ok(output.contains("Your branch is behind"))
 }
 
-fn pull_changes() {
+fn pull_changes() -> Result<()> {
     Command::new("git")
         .args(["pull"])
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?
+        .wait()?;
+    Ok(())
 }
